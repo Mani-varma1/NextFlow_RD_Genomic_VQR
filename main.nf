@@ -14,6 +14,7 @@ log.info """\
     qsr truth vcfs  : ${params.qsrVcfs}
     output directory: ${params.outdir}
     fastqc          : ${params.fastqc}
+    trimmomatic     : ${params.trimmomatic}
     aligner         : ${params.aligner}
     variant caller  : ${params.variant_caller}
     bqsr            : ${params.bqsr}
@@ -29,6 +30,9 @@ if (params.index_genome) {
 }
 if (params.fastqc) {
     include { FASTQC } from './modules/FASTQC'
+}
+if (params.trimmomatic){
+    include { TRIMMOMATIC } from './modules/Trimmomatic'
 }
 include { sortBam } from './modules/sortBam'
 include { markDuplicates } from './modules/markDuplicates'
@@ -50,6 +54,9 @@ if (params.aligner == 'bwa-mem') {
     include { alignReadsBwaMem } from './modules/alignReadsBwaMem'
 } else if (params.aligner == 'bwa-aln') {
     include { alignReadsBwaAln } from './modules/alignReadsBwaAln'
+} else if (params.aligner == 'dragmap'){
+    include { DRAGMAP_HASHTABLE } from './modules/DRAGMAPHASH'
+    include { DRAGMAP_ALIGN } from './modules/DRAGMAP'
 } else {
     error "Unsupported aligner: ${params.aligner}. Please specify 'bwa-mem' or 'bwa-aln'."
 }
@@ -64,12 +71,57 @@ if (params.degraded_dna) {
     include { indexMapDamageBam } from './modules/indexBam'
 }
 
-workflow {
+workflow FASTQC_only {
+    // Set channel to gather read_pairs
+    read_pairs_ch = Channel
+        .fromPath(params.samplesheet)
+        .splitCsv(sep: '\t')
+        .map { row ->
+            if (row.size() == 4) {
+                tuple(row[0], [row[1], row[2]])
+            } else if (row.size() == 3) {
+                tuple(row[0], [row[1]])
+            } else {
+                error "Unexpected row format in samplesheet: $row"
+            }
+        }
+    read_pairs_ch.view()
 
+    if (params.fastqc) {
+        FASTQC(read_pairs_ch)
+    }
+}
+
+workflow TRIMMOMATIC_only {
+    // Set channel to gather read_pairs
+    read_pairs_ch = Channel
+        .fromPath(params.samplesheet)
+        .splitCsv(sep: '\t')
+        .map { row ->
+            if (row.size() == 4) {
+                tuple(row[0], [row[1], row[2]])
+            } else if (row.size() == 3) {
+                tuple(row[0], [row[1]])
+            } else {
+                error "Unexpected row format in samplesheet: $row"
+            }
+        }
+    read_pairs_ch.view()
+    TRIMMOMATIC(read_pairs_ch)
+
+}
+
+
+workflow {
     // User decides to index genome or not
     if (params.index_genome){
-        // Flatten as is of format [fasta, [rest of files..]]
-        indexed_genome_ch = indexGenome(params.genome_file).flatten()
+        if (params.aligner == 'bwa-mem'){
+            // Flatten as is of format [fasta, [rest of files..]]
+            indexed_genome_ch = indexGenome(params.genome_file).flatten()
+        } else if(params.aligner == 'dragmap') {
+            indexed_genome_ch = DRAGMAP_HASHTABLE(params.genome_file).flatten()
+        }
+
     }
     else {
         indexed_genome_ch = Channel.fromPath(params.genome_index_files)
@@ -98,12 +150,29 @@ workflow {
         FASTQC(read_pairs_ch)
     }
 
+    // Trimmomatic on read pairs
     // Align reads to the indexed genome
-    if (params.aligner == 'bwa-mem') {
-        align_ch = alignReadsBwaMem(read_pairs_ch, indexed_genome_ch.collect())
-    } else if (params.aligner == 'bwa-aln') {
-        align_ch = alignReadsBwaAln(read_pairs_ch, indexed_genome_ch.collect())
+    if (params.trimmomatic) {
+        trimmed_reads = TRIMMOMATIC(read_pairs_ch)
+        trimmed_reads.collect()
+        if (params.aligner == 'bwa-mem') {
+            align_ch = alignReadsBwaMem(read_pairs_ch, indexed_genome_ch.collect())
+        } else if (params.aligner == 'bwa-aln') {
+            align_ch = alignReadsBwaAln(read_pairs_ch, indexed_genome_ch.collect())
+        } else if (params.aligner == 'dragmap') {
+            align_ch = DRAGMAP_ALIGN(read_pairs_ch, indexed_genome_ch.collect())
+        }
+    } else {
+        if (params.aligner == 'bwa-mem') {
+            align_ch = alignReadsBwaMem(read_pairs_ch, indexed_genome_ch.collect())
+        } else if (params.aligner == 'bwa-aln') {
+            align_ch = alignReadsBwaAln(read_pairs_ch, indexed_genome_ch.collect())
+        } else if (params.aligner == 'dragmap') {
+            align_ch = DRAGMAP_ALIGN(read_pairs_ch, indexed_genome_ch.collect())
+        }
     }
+
+
 
     // Sort BAM files
     sort_ch = sortBam(align_ch)
@@ -233,26 +302,6 @@ workflow {
     }
 }
 
-workflow FASTQC_only {
-    // Set channel to gather read_pairs
-    read_pairs_ch = Channel
-        .fromPath(params.samplesheet)
-        .splitCsv(sep: '\t')
-        .map { row ->
-            if (row.size() == 4) {
-                tuple(row[0], [row[1], row[2]])
-            } else if (row.size() == 3) {
-                tuple(row[0], [row[1]])
-            } else {
-                error "Unexpected row format in samplesheet: $row"
-            }
-        }
-    read_pairs_ch.view()
-
-    if (params.fastqc) {
-        FASTQC(read_pairs_ch)
-    }
-}
 
 workflow.onComplete {
     log.info ( workflow.success ? "\nworkflow is done!\n" : "Oops .. something went wrong" )

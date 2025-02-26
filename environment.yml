@@ -1,5 +1,5 @@
 name:
-  NextFlow_Gen_RD
+  NF_GRD
 channels:
   - bioconda
   - conda-forge
