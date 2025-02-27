@@ -1,5 +1,5 @@
 process DRAGMAP_HASHTABLE {
-    label 'process_low'
+    label 'process_high'
 
     container 'gambalab/dragmap'
 

@@ -62,6 +62,8 @@ if (params.aligner == 'bwa-mem') {
 }
 if (params.variant_caller == 'haplotype-caller') {
     include { haplotypeCaller } from './modules/haplotypeCaller'
+} else if (params.variant_caller == 'deepvariant') {
+    include { deepvariant } from './modules/DeepVariant'
 } else {
     error "Unsupported variant caller: ${params.variant_caller}. Please specify 'haplotype-caller'."
 }
@@ -109,6 +111,15 @@ workflow TRIMMOMATIC_only {
     read_pairs_ch.view()
     TRIMMOMATIC(read_pairs_ch)
 
+}
+
+
+workflow DeepVariant {
+    // Set channel to gather read_pairs
+    bam_ch = Channel.fromFilePairs("/home/mani/NextFlow_RD_Genomic_VQR/results/BAM/NA12878_sml_exm_filtered_sorted_dedup.bam{,.bai}", checkIfExists: true).map { file, files -> tuple(file.toString().tokenize('/').last().tokenize('.').first(), files) }
+    bai_ch = Channel.fromPath("/home/mani/NextFlow_RD_Genomic_VQR/results/BAM/NA12878_sml_exm_filtered_sorted_dedup.bam.bai")
+    refGenome= Channel.fromPath("/home/mani/NextFlow_RD_Genomic_VQR/data/genome/Homo_sapiens_assembly38.fasta")
+    deepvariant(bam_ch,refGenome)
 }
 
 
@@ -211,6 +222,8 @@ workflow {
     // Run HaplotypeCaller on BQSR files
     if (params.variant_caller == "haplotype-caller") {
         gvcf_ch = haplotypeCaller(bqsr_ch, indexed_genome_ch.collect()).collect()
+    // } else if ( params.variant_caller == "deepvariant"){
+    //     gvcf_ch = DeepVariant(bqsr_ch, params.genome_file).collect()
     }
 
     // Now we map to create separate lists for sample IDs, VCF files, and index files
