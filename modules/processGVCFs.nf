@@ -1,6 +1,6 @@
 process combineGVCFs {
     if (params.platform == 'local') {
-        label 'process_low'
+        label 'process_high'
     } else if (params.platform == 'cloud') {
         label 'process_medium'
     }
@@ -9,7 +9,10 @@ process combineGVCFs {
 
     input:
     tuple val(sample_ids), path(gvcf_files), path(gvcf_index_files)
-    path indexFiles
+    // path indexFiles
+    path genomeFasta
+    path genomeFai
+    path genomeDict
 
     output:
     tuple val("${sample_ids.join('_')}"), file("*_combined.vcf"), file("*_combined.vcf.idx")
@@ -21,12 +24,15 @@ process combineGVCFs {
     """
     echo "Combining GVCFs for samples: ${gvcf_files.collect { it.baseName }.join(', ')}"
 
-    genomeFasta="\$(find -L . -name '*.fasta')"
-
-    # Ensure dictionary exists
-    if [[ -e "\${genomeFasta}.dict" ]]; then
-        mv "\${genomeFasta}.dict" "\${genomeFasta%.*}.dict"
+    if [[ -n ${params.genome_file} ]]; then
+        genomeFasta=${genomeFasta}
+    else
+        genomeFasta=\$(find -L . -name '*.fasta')
     fi
+
+    echo "Genome File: \${genomeFasta}"
+    echo "Genom Fai : ${genomeFai}"
+    echo "Geome dict : ${genomeDict}"
 
     gatk CombineGVCFs -R "\${genomeFasta}"\
         ${gvcf_files_args} \
@@ -36,7 +42,7 @@ process combineGVCFs {
 
 process genotypeGVCFs {
     if (params.platform == 'local') {
-        label 'process_low'
+        label 'process_high'
     } else if (params.platform == 'cloud') {
         label 'process_medium'
     }
@@ -45,7 +51,10 @@ process genotypeGVCFs {
 
     input:
     tuple val(combined_sample_id), file(combined_gvcf), file(combined_gvcf_idx)
-    path indexFiles
+    // path indexFiles
+    path genomeFasta
+    path genomeFai
+    path genomeDict
 
     output:
     tuple val(combined_sample_id), file("*_genotyped.vcf"), file("*_genotyped.vcf.idx")
@@ -57,12 +66,14 @@ process genotypeGVCFs {
     echo "Genotyping combined GVCF: ${combined_gvcf.baseName}"
 
     if [[ -n ${params.genome_file} ]]; then
-        genomeFasta=\$(basename ${params.genome_file})
+        genomeFasta=${genomeFasta}
     else
         genomeFasta=\$(find -L . -name '*.fasta')
     fi
 
     echo "Genome File: \${genomeFasta}"
+    echo "Genom Fai : ${genomeFai}"
+    echo "Geome dict : ${genomeDict}"
 
     # Rename the dictionary file to the expected name if it exists
     if [[ -e "\${genomeFasta}.dict" ]]; then

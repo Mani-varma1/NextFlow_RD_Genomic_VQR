@@ -2,7 +2,7 @@ nextflow.enable.dsl = 2
 
 process deepvariant {
     if (params.platform == 'local') {
-        label 'process_low'
+        label 'process_high'
     } else if (params.platform == 'cloud') {
         label 'process_high'
     }

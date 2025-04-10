@@ -4,7 +4,7 @@
 process sortBam {
 
     if (params.platform == 'local') {
-        label 'process_low'
+        label 'process_medium'
     } else if (params.platform == 'cloud') {
         label 'process_medium'
     }
@@ -25,7 +25,7 @@ process sortBam {
     outputBam="\$(basename ${bamFile} .bam)_filtered_sorted.bam"
 
     # Use samtools to filter the BAM file with a minimum MAPQ score of 30, and then sort it
-    samtools view -h -q 30 -b ${bamFile} | samtools sort -o \${outputBam} -
+    samtools view -h -q 30 -b ${bamFile} | samtools sort -@ $task.cpus -o \${outputBam} -
 
     echo "\${outputBam}"
 

@@ -1,6 +1,6 @@
 process filterVCF {
     if (params.platform == 'local') {
-        label 'process_low'
+        label 'process_high'
     } else if (params.platform == 'cloud') {
         label 'process_medium'
     }
@@ -13,7 +13,10 @@ process filterVCF {
 
     input:
     tuple val(sample_id), file(vcfFile), file(vcfIndex)
-    path indexFiles
+    // path indexFiles
+    path genomeFasta
+    path genomeFai
+    path genomeDict
 
     // Output channel for sample_id and filtered VCF files
     output:
@@ -26,17 +29,15 @@ process filterVCF {
     # Print a message indicating the start of the process for the current sample
     echo "Running Variant Filtration for Sample: ${vcfFile}"
 
-    if [[ -n "${params.genome_file}" ]]; then
-        genomeFasta=\$(basename ${params.genome_file})
+    if [[ -n ${params.genome_file} ]]; then
+        genomeFasta=${genomeFasta}
     else
         genomeFasta=\$(find -L . -name '*.fasta')
     fi
 
     echo "Genome File: \${genomeFasta}"
-
-    if [[ -e "\${genomeFasta}.dict" ]]; then
-        mv "\${genomeFasta}.dict" "\${genomeFasta%.*}.dict"
-    fi
+    echo "Genom Fai : ${genomeFai}"
+    echo "Geome dict : ${genomeDict}"
 
     # Set output VCF filename with _filtered.vcf instead of .filtered.vcf
     outputVcf="\$(basename ${vcfFile} .vcf)_filtered.vcf"

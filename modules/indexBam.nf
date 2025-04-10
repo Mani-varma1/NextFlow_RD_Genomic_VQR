@@ -4,7 +4,7 @@
 process indexBam {
 
     if (params.platform == 'local') {
-        label 'process_low'
+        label 'process_medium'
     } else if (params.platform == 'cloud') {
         label 'process_medium'
     }
@@ -26,7 +26,7 @@ process indexBam {
     echo "Running Index Bam"
  
     # Use samtools to create the index for the input BAM file
-    samtools index ${bamFile} ${bamFile}.bai
+    samtools index -@ $task.cpus ${bamFile} ${bamFile}.bai
 
     echo "Bam Indexing Complete"
     """

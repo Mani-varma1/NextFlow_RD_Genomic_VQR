@@ -1,7 +1,7 @@
 process baseRecalibrator {
 
     if (params.platform == 'local') {
-        label 'process_low'
+        label 'process_high'
     } else if (params.platform == 'cloud') {
         label 'process_medium'
     }
@@ -15,7 +15,9 @@ process baseRecalibrator {
     input:
     tuple val(sample_id), file(bamFile), file(baiFile)
     val knownSites
-    path indexFiles
+    path genomeFasta
+    path genomeFai
+    path genomeDict
     path qsrcVcfFiles
 
     output:
@@ -26,18 +28,15 @@ process baseRecalibrator {
     """
     echo "Running BQSR"
 
-    if [[ -n params.genome_file ]]; then
-        genomeFasta=\$(basename ${params.genome_file})
+    if [[ -n ${params.genome_file} ]]; then
+        genomeFasta=${genomeFasta}
     else
         genomeFasta=\$(find -L . -name '*.fasta')
     fi
 
     echo "Genome File: \${genomeFasta}"
-
-    # Rename the dictionary file to the expected name if it exists
-    if [[ -e "\${genomeFasta}.dict" ]]; then
-        mv "\${genomeFasta}.dict" "\${genomeFasta%.*}.dict"
-    fi
+    echo "Genom Fai : ${genomeFai}"
+    echo "Geome dict : ${genomeDict}"
 
     # Generate recalibration table for the input BAM file
     gatk --java-options "-Xmx8G" BaseRecalibrator \

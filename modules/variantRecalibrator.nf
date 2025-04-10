@@ -1,7 +1,7 @@
 process variantRecalibrator {
 
     if (params.platform == 'local') {
-        label 'process_low'
+        label 'process_high'
     } else if (params.platform == 'cloud') {
         label 'process_medium'
     }
@@ -14,7 +14,10 @@ process variantRecalibrator {
     input:
     tuple val(sample_id), file(vcf), file(vcfIndex)
     val knownSitesArgs
-    path genome
+    // path indexFiles
+    path genomeFasta
+    path genomeFai
+    path genomeDict
     path qsrc_vcf
 
     output:
@@ -27,17 +30,15 @@ process variantRecalibrator {
     """
     echo "Running VQSR"
 
-    if [[ -n "${params.genome_file}" ]]; then
-        genomeFasta=\$(basename ${params.genome_file})
+    if [[ -n ${params.genome_file} ]]; then
+        genomeFasta=${genomeFasta}
     else
         genomeFasta=\$(find -L . -name '*.fasta')
     fi
 
     echo "Genome File: \${genomeFasta}"
-
-    if [[ -e "\${genomeFasta}.dict" ]]; then
-        mv "\${genomeFasta}.dict" "\${genomeFasta%.*}.dict"
-    fi
+    echo "Genom Fai : ${genomeFai}"
+    echo "Geome dict : ${genomeDict}"
 
     if ${degradedDna}; then
         echo "Running VQSR for degraded DNA (1x coverage)"

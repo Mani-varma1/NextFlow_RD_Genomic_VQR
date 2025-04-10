@@ -1,7 +1,7 @@
 process identityAnalysis {
 
     if (params.platform == 'local') {
-        label 'process_low'
+        label 'process_high'
     } else if (params.platform == 'cloud') {
         label 'process_medium'
     }

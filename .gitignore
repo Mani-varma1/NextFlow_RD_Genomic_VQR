@@ -1,5 +1,7 @@
 results/
 data/
 work/
+qsr_vcfs
 .nextflow/
 .nextflow*
+Main*

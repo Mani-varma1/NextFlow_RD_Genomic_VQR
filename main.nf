@@ -21,6 +21,8 @@ log.info """\
     degraded_dna    : ${params.degraded_dna}
     variant_recalibration: ${params.variant_recalibration}
     identity_analysis: ${params.identity_analysis}
+    fast dict       : ${params.fasta_dict}
+    fast fai       : ${params.fasta_fai}
     ============================================
 """.stripIndent()
 
@@ -62,6 +64,7 @@ if (params.aligner == 'bwa-mem') {
 }
 if (params.variant_caller == 'haplotype-caller') {
     include { haplotypeCaller } from './modules/haplotypeCaller'
+    include { parallelHaplotypeCaller } from './modules/parallelHaplotypeCaller'
 } else if (params.variant_caller == 'deepvariant') {
     include { deepvariant } from './modules/DeepVariant'
 } else {
@@ -114,13 +117,6 @@ workflow TRIMMOMATIC_only {
 }
 
 
-workflow DeepVariant {
-    // Set channel to gather read_pairs
-    bam_ch = Channel.fromFilePairs("/home/mani/NextFlow_RD_Genomic_VQR/results/BAM/NA12878_sml_exm_filtered_sorted_dedup.bam{,.bai}", checkIfExists: true).map { file, files -> tuple(file.toString().tokenize('/').last().tokenize('.').first(), files) }
-    bai_ch = Channel.fromPath("/home/mani/NextFlow_RD_Genomic_VQR/results/BAM/NA12878_sml_exm_filtered_sorted_dedup.bam.bai")
-    refGenome= Channel.fromPath("/home/mani/NextFlow_RD_Genomic_VQR/data/genome/Homo_sapiens_assembly38.fasta")
-    deepvariant(bam_ch,refGenome)
-}
 
 
 workflow {
@@ -130,7 +126,7 @@ workflow {
             // Flatten as is of format [fasta, [rest of files..]]
             indexed_genome_ch = indexGenome(params.genome_file).flatten()
         } else if(params.aligner == 'dragmap') {
-            indexed_genome_ch = DRAGMAP_HASHTABLE(params.genome_file).flatten()
+            indexed_genome_ch = DRAGMAP_HASHTABLE(params.genome_file)
         }
 
     }
@@ -140,6 +136,9 @@ workflow {
 
     // Create qsrc_vcf_ch channel
     qsrc_vcf_ch = Channel.fromPath(params.qsrVcfs)
+    genomeFasta = Channel.fromPath(params.genome_file)
+    genomeFai = Channel.fromPath(params.fasta_fai)
+    genomeDict = Channel.fromPath(params.fasta_dict)
 
     // Set channel to gather read_pairs
     read_pairs_ch = Channel
@@ -212,7 +211,7 @@ workflow {
 
     if (params.bqsr) {
         // Run BQSR on indexed BAM files
-        bqsr_ch = baseRecalibrator(mapDamage_ch, knownSites_ch, indexed_genome_ch.collect(), qsrc_vcf_ch.collect())
+        bqsr_ch = baseRecalibrator(mapDamage_ch, knownSites_ch, genomeFasta,genomeFai,genomeDict, qsrc_vcf_ch.collect())
 
     } else {
         // If BQSR is skipped, just pass through the mapDamage_ch channel
@@ -221,9 +220,14 @@ workflow {
 
     // Run HaplotypeCaller on BQSR files
     if (params.variant_caller == "haplotype-caller") {
-        gvcf_ch = haplotypeCaller(bqsr_ch, indexed_genome_ch.collect()).collect()
-    // } else if ( params.variant_caller == "deepvariant"){
-    //     gvcf_ch = DeepVariant(bqsr_ch, params.genome_file).collect()
+        // Create a channel with all reference files including indices
+        // ref_files_ch = Channel.fromPath("${params.genome_file}*")
+        //     .mix(Channel.fromPath("${params.genome_file.replaceAll(/\.fasta$/, '')}.dict"))
+        //     .collect()
+        
+        // // Pass the complete set of reference files
+        // gvcf_ch = parallelHaplotypeCaller(bqsr_ch, ref_files_ch)
+        gvcf_ch = haplotypeCaller(bqsr_ch, genomeFasta,genomeFai,genomeDict).collect()
     }
 
     // Now we map to create separate lists for sample IDs, VCF files, and index files
@@ -236,10 +240,10 @@ workflow {
         }
 
     // Combine GVCFs
-    combined_gvcf_ch = combineGVCFs(all_gvcf_ch, indexed_genome_ch.collect())
+    combined_gvcf_ch = combineGVCFs(all_gvcf_ch, genomeFasta,genomeFai,genomeDict)
 
     // Run GenotypeGVCFs
-    final_vcf_ch = genotypeGVCFs(combined_gvcf_ch, indexed_genome_ch.collect())
+    final_vcf_ch = genotypeGVCFs(combined_gvcf_ch, genomeFasta,genomeFai,genomeDict)
 
     // Conditionally apply variant recalibration or filtering
     if (params.variant_recalibration) {
@@ -263,9 +267,9 @@ workflow {
                 return "--resource:${baseName},${resourceArgs} ${file.getName()}" // Only the filename, no full path
             }
             .collect()
-        filtered_vcf_ch = variantRecalibrator(final_vcf_ch, knownSitesArgs_ch, indexed_genome_ch.collect(), qsrc_vcf_ch.collect())
+        filtered_vcf_ch = variantRecalibrator(final_vcf_ch, knownSitesArgs_ch, genomeFasta,genomeFai,genomeDict, qsrc_vcf_ch.collect())
     } else {
-        filtered_vcf_ch = filterVCF(final_vcf_ch, indexed_genome_ch.collect())
+        filtered_vcf_ch = filterVCF(final_vcf_ch, genomeFasta,genomeFai,genomeDict)
     }
 
     // Conditionally run identityAnalysis if identity_analysis is true

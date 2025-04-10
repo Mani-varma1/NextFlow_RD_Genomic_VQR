@@ -5,7 +5,7 @@
 process indexGenome {
 
     if (params.platform == 'local') {
-        label 'process_low'
+        label 'process_high'
     } else if (params.platform == 'cloud') {
         label 'process_medium'
     }
@@ -13,7 +13,7 @@ process indexGenome {
 
 
     // Publish indexed files to the specified directory
-    publishDir("$params.outdir/GENOME_IDX", mode: "copy")
+    publishDir("$params.outdir/GENOME_IDX/BWA/", mode: "copy")
 
     input:
     path genomeFasta

@@ -7,7 +7,7 @@
  */
 process TRIMMOMATIC{
 
-    label 'process_low'
+    label 'process_high'
 
     container 'staphb/trimmomatic'
 
