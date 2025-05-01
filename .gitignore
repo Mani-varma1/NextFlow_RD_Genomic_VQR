@@ -5,3 +5,4 @@ qsr_vcfs
 .nextflow/
 .nextflow*
 Main*
+hap*

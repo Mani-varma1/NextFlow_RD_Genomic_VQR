@@ -10,3 +10,5 @@
 
 
 nextflow run main.nf -profile slurm
+
+
